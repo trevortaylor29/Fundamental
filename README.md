@@ -2,7 +2,6 @@
 ## ℹ️ About the Project
 
 Fundamental is a research tool that helps you quickly understand and compare investment funds (ETFs, mutual funds, indexes, and more).  
-
 Key features:
 -  **Search any ticker** (e.g., ARGT, FNGU, IVV)  
 -  **Performance tab** — See growth multiples and drawdowns over time  
