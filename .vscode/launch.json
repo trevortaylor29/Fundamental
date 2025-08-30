@@ -1,0 +1,14 @@
+﻿{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Streamlit: Fund Intel Pro",
+      "type": "python",
+      "request": "launch",
+      "module": "streamlit",
+      "args": ["run", "streamlit_app.py", "--server.port", "8501"],
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}
