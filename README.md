@@ -1,8 +1,7 @@
----
-## ℹ️ About the Project
+##  About the Project
 
 Fundamental is a research tool that helps you quickly understand and compare investment funds (ETFs, mutual funds, indexes, and more).  
-Key features:
+Key features-
 -  **Search any ticker** (e.g., ARGT, FNGU, IVV)  
 -  **Performance tab** — See growth multiples and drawdowns over time  
 -  **Compare tab** — Side-by-side returns, volatility, expense ratios, dividends, AUM  
@@ -17,7 +16,7 @@ Key features:
   - News sentiment  
 -  **Discover tab** — Ranks a curated universe of 100+ funds by score, so you can see “leaders” at a glance  
 
-⚠️ Holdings & exposure data are not currently shown (due to Yahoo Finance and issuer websites gating holdings behind authenticated/JavaScript feeds).
+ Holdings & exposure data are not currently shown (due to Yahoo Finance and issuer websites gating holdings behind authenticated/JavaScript feeds).
 
 ---
 
@@ -37,7 +36,7 @@ Key features:
    - Double-click `run.bat`  
    - The first run will take a few minutes (installs packages).  
    - When ready, a browser window will open at:  
-     👉 [http://localhost:8501](http://localhost:8501)
+      [http://localhost:8501](http://localhost:8501)
 
 From now on just double-click `run.bat` to launch.
 
