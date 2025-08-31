@@ -14,7 +14,7 @@ COPY . .
 ENV STREAMLIT_BROWSER_GATHERUSAGESTATS=false \
     PYTHONUNBUFFERED=1
 
-EXPOSE 8501
+EXPOSE 8080
 
-# NOTE: use /bin/sh -c so ${PORT} expands; default to 8501 if unset
-CMD ["/bin/sh","-c","streamlit run streamlit_app.py --server.headless=true --server.address=0.0.0.0 --server.enableCORS=false --server.port=${PORT:-8501}"]
+# Use shell so ${PORT} expands; fall back to 8080
+CMD ["/bin/sh","-c","streamlit run streamlit_app.py --server.headless=true --server.address=0.0.0.0 --server.enableXsrfProtection=false --server.port=${PORT:-8080}"]
