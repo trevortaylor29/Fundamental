@@ -7,14 +7,16 @@ from fundintel import data, score, news, compare
 st.set_page_config(page_title="Fundamental", layout="wide")
 
 st.title(" Fundamental - The fundamentals of every fund.")
-st.caption("Not Investment Advice. Created with Python - Live data from Yahoo Finance")
+st.caption("Not Investment Advice. Do your own research.")
 
 with st.sidebar:
     st.header("Tickers")
     tickers_input = st.text_input("Enter 1–5 symbols (comma-separated)", value="USD,PLTR")
     st.header("⚙️ Settings")
     risk = st.select_slider("Risk tolerance", options=["Low","Medium","High"], value="Medium")
-    horizon = st.select_slider("Time horizon", options=["Short (0-6m)","Medium (6-36m)","Long (3y+)"], value="Medium (6-36m)")
+    # horizon = st.select_slider("Time horizon", options=["Short (0-6m)","Medium (6-36m)","Long (3y+)"], value="Medium (6-36m)")
+    
+    horizon = "Medium (6-36m)"
     show_news = st.checkbox("Fetch recent news", value=True)
     st.markdown("---")
     st.markdown("**Tip:** Try ETFs (e.g., ARGT) or ETNs (e.g., FNGU).")
@@ -24,7 +26,10 @@ tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()][:5]
 if not tickers:
     st.stop()
 
-tabs = st.tabs(["Overview", "Performance", "Holdings", "Exposure", "News & Filings", "Risk & Score", "Compare", "Discover Top Funds"])
+tab_overview, tab_perf, tab_news, tab_risk, tab_compare, tab_discover = st.tabs(
+    ["Overview", "Performance", "News & Filings", "Risk & Score", "Compare", "Discover Top Funds"]
+)
+
 
 # Cache fetches
 profiles = {}
@@ -38,7 +43,7 @@ with st.spinner("Fetching data..."):
         news_items[t] = news.fetch_news(t) if show_news else []
 
 # -------- Overview --------
-with tabs[0]:
+with tab_overview:
     cols = st.columns(min(3, len(tickers)))
     for i, t in enumerate(tickers):
         pr = profiles[t]
@@ -57,11 +62,20 @@ with tabs[0]:
             c3.write(f"**AUM:** ${aum:,.0f}" if isinstance(aum, (int,float)) else "**AUM:** —")
             st.caption(pr.get("summary",""))
     st.markdown("---")
-    st.caption("© Fundamental. For education only. Do your own research.")
+    st.caption("""
+    ### Disclosures & Data Notes
+    - **Not investment advice.** This tool is for **educational and research** use only. Nothing here is a recommendation to buy, sell, or hold any security.
+    - **Data sources.** Quotes, profiles, and history are fetched from **public endpoints** (e.g., Yahoo Finance via yfinance), plus public news feeds. Data can be **delayed, revised, or incomplete**.
+    - **Accuracy & uptime.** We **do not warrant** accuracy, completeness, or uninterrupted availability. Validate with official sources before making decisions.
+    - **Trademarks.** Tickers and brand marks belong to their respective owners and are used for identification only.
+    - **Performance math.** Returns use **adjusted prices** (splits/dividends) to align with common retail portals; provider methodologies can differ.
+    - **Liability.** The authors/operators are **not liable** for any losses or decisions made based on this site.
+    """)
+
 # -------- Performance --------
-with tabs[1]:
+with tab_perf:
     import plotly.express as px
-    st.subheader("Total Return (price-only, unadjusted)")
+    st.subheader("Total Return since inception (or last 5 years)")
 
     st.info(
         "**How to read this chart**\n"
@@ -144,38 +158,41 @@ with tabs[1]:
 
 
     st.markdown("---")
-    st.caption("© Fundamental. For education only. Do your own research.")
+    st.caption(
+        "© Fundamental — Educational tool only. Not investment advice. Data from public web sources (incl. Yahoo Finance via yfinance) "
+        "may be delayed or incomplete. No warranty of accuracy or fitness. Past performance is not indicative of future results."
+    )
 
 # -------- Holdings --------
-with tabs[2]:
-    st.subheader("Top Holdings (Under Construction)")
-    st.warning(
-        "Holdings data could not be displayed. "
-        "Unlike price, volume, and profile information (which Yahoo Finance exposes via their quote APIs), "
-        "constituent-level holdings are **not returned in the standard Yahoo endpoints**. "
-        "Yahoo migrated these holdings feeds behind gated, cookie-authenticated services. "
-        "At the same time, most ETF issuers (e.g. Global X, iShares, Vanguard) now inject their daily holdings tables "
-        "into the page dynamically using JavaScript. This means a simple HTTP request (like those used in `requests` or `yfinance`) "
-        "returns only the page shell — without the rendered table — so parsing yields an empty result. "
+# with tabs[2]:
+#     st.subheader("Top Holdings (Under Construction)")
+#     st.warning(
+#         "Holdings data could not be displayed. "
+#         "Unlike price, volume, and profile information (which Yahoo Finance exposes via their quote APIs), "
+#         "constituent-level holdings are **not returned in the standard Yahoo endpoints**. "
+#         "Yahoo migrated these holdings feeds behind gated, cookie-authenticated services. "
+#         "At the same time, most ETF issuers (e.g. Global X, iShares, Vanguard) now inject their daily holdings tables "
+#         "into the page dynamically using JavaScript. This means a simple HTTP request (like those used in `requests` or `yfinance`) "
+#         "returns only the page shell — without the rendered table — so parsing yields an empty result. "
 
-    )
+#     )
 
-    st.markdown("---")
-    st.caption("© Fundamental. For education only. Do your own research.")
+    # st.markdown("---")
+    # st.caption("© Fundamental. For education only. Do your own research.")
 # -------- Exposure --------
-with tabs[3]:
-    st.subheader("Sector & Country Exposure (Under Construction)")
-    st.info(
-        "Exposure charts are derived directly from fund holdings. "
-        "Because upstream holdings feeds are currently inaccessible (see Holdings tab), "
-        "exposure breakdowns by sector and country are also unavailable."
-    )
+# with tabs[3]:
+#     st.subheader("Sector & Country Exposure (Under Construction)")
+#     st.info(
+#         "Exposure charts are derived directly from fund holdings. "
+#         "Because upstream holdings feeds are currently inaccessible (see Holdings tab), "
+#         "exposure breakdowns by sector and country are also unavailable."
+#     )
 
-    st.markdown("---")
-    st.caption("© Fundamental. For education only. Do your own research.")
+#     st.markdown("---")
+#     st.caption("© Fundamental. For education only. Do your own research.")
 
 # -------- News & Filings --------
-with tabs[4]:
+with tab_news:
     for t in tickers:
         st.subheader(f"📰 {t}")
         items = news_items.get(t, [])
@@ -187,10 +204,13 @@ with tabs[4]:
             st.markdown(f"- [{it['title']}]({it['link']}) — {date_str}")
 
     st.markdown("---")
-    st.caption("© Fundamental. For education only. Do your own research.")
+    st.caption(
+        "© Fundamental — Educational tool only. Not investment advice. Data from public web sources (incl. Yahoo Finance via yfinance) "
+        "may be delayed or incomplete. No warranty of accuracy or fitness. Past performance is not indicative of future results."
+    )
 
 # -------- Risk & Score --------
-with tabs[5]:
+with tab_risk:
     import pandas as pd
 
     st.subheader("Transparent Score (0–100)")
@@ -279,7 +299,7 @@ with tabs[5]:
     st.caption("© Fundamental. For education only. Do your own research.")
 
 # -------- Compare --------
-with tabs[6]:
+with tab_compare:
     import pandas as pd
     st.subheader("Compare Funds")
 
@@ -415,12 +435,15 @@ with tabs[6]:
     )
 
     st.markdown("---")
-    st.caption("© Fundamental. For education only. Do your own research.")
+    st.caption(
+        "© Fundamental — Educational tool only. Not investment advice. Data from public web sources (incl. Yahoo Finance via yfinance) "
+        "may be delayed or incomplete. No warranty of accuracy or fitness. Past performance is not indicative of future results."
+    )
 
 
 # -------- Discover Top Funds --------
 # -------- Discover Top Funds --------
-with tabs[-1]:
+with tab_discover:
     import re
     from fundintel.universe import DEFAULT_UNIVERSE
 
@@ -580,4 +603,9 @@ with tabs[-1]:
         file_name="fund_rankings.csv",
         mime="text/csv",
         key="discover_download_csv",
+    )
+
+    st.caption(
+        "© Fundamental — Educational tool only. Not investment advice. Data from public web sources (incl. Yahoo Finance via yfinance) "
+        "may be delayed or incomplete. No warranty of accuracy or fitness. Past performance is not indicative of future results."
     )
