@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-echo === Fundamental: one-time setup & launch ===
+echo === Fundamental: one-time setup ^& launch ===
 
 REM --- Find Python (prefer 'py' launcher on Windows) ---
 where py >nul 2>nul
@@ -61,5 +61,5 @@ echo Starting app at http://localhost:8501
 streamlit run streamlit_app.py
 
 echo.
-echo (When you close the app, this window can be closed.)
+echo (You can close this window after you exit the app.)
 pause
