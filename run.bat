@@ -1,9 +1,14 @@
 @echo off
 setlocal
 
-echo === Fundamental: one-time setup ^& launch ===
+REM Always start in the folder that contains this script
+cd /d "%~dp0"
 
-REM --- Find Python (prefer 'py' launcher on Windows) ---
+echo ============================================
+echo Fundamental: setup and launch
+echo ============================================
+
+REM --- Find Python (prefer py launcher) ---
 where py >nul 2>nul
 if %errorlevel%==0 (
   set "PY=py -3"
@@ -14,8 +19,8 @@ if %errorlevel%==0 (
   ) else (
     echo.
     echo [ERROR] Python 3 not found.
-    echo Please install Python 3.10+ from https://www.python.org/downloads/ (check "Add Python to PATH"),
-    echo then double-click this file again.
+    echo Please install Python 3.10+ from https://www.python.org/downloads/
+    echo (check "Add Python to PATH"), then run this file again.
     pause
     exit /b 1
   )
@@ -49,7 +54,6 @@ if exist requirements-lock.txt (
   echo Installing dependencies...
   pip install -r requirements.txt
 )
-
 if %errorlevel% neq 0 (
   echo [ERROR] Dependency install failed.
   pause
