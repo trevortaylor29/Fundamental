@@ -26,8 +26,8 @@ tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()][:5]
 if not tickers:
     st.stop()
 
-tab_overview, tab_perf, tab_news, tab_risk, tab_compare, tab_discover = st.tabs(
-    ["Overview", "Performance", "News & Filings", "Risk & Score", "Compare", "Discover Top Funds"]
+tab_overview, tab_perf, tab_news, tab_holdings, tab_risk, tab_compare, tab_discover = st.tabs(
+    ["Overview", "Performance", "News & Filings", "Holdings", "Risk & Score", "Compare", "Discover Top Funds"]
 )
 
 
@@ -164,21 +164,21 @@ with tab_perf:
     )
 
 # -------- Holdings --------
-# with tabs[2]:
-#     st.subheader("Top Holdings (Under Construction)")
-#     st.warning(
-#         "Holdings data could not be displayed. "
-#         "Unlike price, volume, and profile information (which Yahoo Finance exposes via their quote APIs), "
-#         "constituent-level holdings are **not returned in the standard Yahoo endpoints**. "
-#         "Yahoo migrated these holdings feeds behind gated, cookie-authenticated services. "
-#         "At the same time, most ETF issuers (e.g. Global X, iShares, Vanguard) now inject their daily holdings tables "
-#         "into the page dynamically using JavaScript. This means a simple HTTP request (like those used in `requests` or `yfinance`) "
-#         "returns only the page shell — without the rendered table — so parsing yields an empty result. "
+with tab_holdings:
+    st.subheader("Top Holdings (Under Construction)")
+    st.warning(
+        "Holdings data can't be displayed until I find a workaround. "
+        "Unlike price, volume, and profile information (which Yahoo Finance exposes via their quote APIs), "
+        "constituent-level holdings are **not returned in the standard Yahoo endpoints**. "
+        "Yahoo migrated these holdings feeds behind gated, cookie-authenticated services. "
+        "At the same time, most ETF issuers (e.g. Global X, iShares, Vanguard) now inject their daily holdings tables "
+        "into the page dynamically using JavaScript. This means a simple HTTP request "
+        "returns only the page shell — without the rendered table — so parsing yields an empty result. "
 
-#     )
+    )
 
-    # st.markdown("---")
-    # st.caption("© Fundamental. For education only. Do your own research.")
+    st.markdown("---")
+    st.caption("© Fundamental. For education only. Do your own research.")
 # -------- Exposure --------
 # with tabs[3]:
 #     st.subheader("Sector & Country Exposure (Under Construction)")
