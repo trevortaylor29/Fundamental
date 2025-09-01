@@ -65,7 +65,7 @@ with tab_overview:
     st.caption("""
     ### Disclosures & Data Notes
     - **Not investment advice.** This tool is for **educational and research** use only. Nothing here is a recommendation to buy, sell, or hold any security.
-    - **Data sources.** Quotes, profiles, and history are fetched from **public endpoints** (e.g., Yahoo Finance via yfinance), plus public news feeds. Data can be **delayed, revised, or incomplete**.
+    - **Data sources.** Quotes, profiles, and history are fetched from **public endpoints** (e.g., Yahoo Finance via yfinance), plus public news feeds. Data can be **delayed, revised, or incomplete**. This project is not affiliated with or endorsed by Yahoo Finance. References to Yahoo are for descriptive purposes only.
     - **Accuracy & uptime.** We **do not warrant** accuracy, completeness, or uninterrupted availability. Validate with official sources before making decisions.
     - **Trademarks.** Tickers and brand marks belong to their respective owners and are used for identification only.
     - **Performance math.** Returns use **adjusted prices** (splits/dividends) to align with common retail portals; provider methodologies can differ.
@@ -174,6 +174,7 @@ with tab_holdings:
         "At the same time, most ETF issuers (e.g. Global X, iShares, Vanguard) now inject their daily holdings tables "
         "into the page dynamically using JavaScript. This means a simple HTTP request "
         "returns only the page shell — without the rendered table — so parsing yields an empty result. "
+        "This project is not affiliated with or endorsed by Yahoo Finance. References to Yahoo are for descriptive purposes only."
 
     )
 
