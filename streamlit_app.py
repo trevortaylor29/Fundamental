@@ -443,26 +443,33 @@ with tab_compare:
 
 
 # -------- Discover Top Funds --------
-# -------- Discover Top Funds --------
 with tab_discover:
     import re
     from fundintel.universe import DEFAULT_UNIVERSE
 
     st.subheader("Top Funds by Transparent Score")
     st.caption(
-        "Ranks a curated universe using the same factor model: cost, liquidity, volatility, drawdown, "
-        "structure, momentum, tracking (placeholder), and news."
+        "Scores blend fundamentals and market behavior, adapted to your risk setting: "
+        "• Cost (expense ratio) • Liquidity (volume) • Volatility (realized) • Drawdown "
+        "• Structure (penalize ETNs/leveraged) • Momentum (multi-window) • Recent multi-period "
+        "performance vs. S&P 500 • Light news signal. We show the same return stats as Compare, "
+        "and always include the ^GSPC benchmark for context."
     )
 
-    # Controls (unique keys)
+    # ── Controls ──────────────────────────────────────────────────────────────────
     colf, coln = st.columns([3, 1])
     with colf:
-        universe_text = st.text_area(
-            "Universe (tickers, comma/space/newline separated)",
-            value=",".join(DEFAULT_UNIVERSE),
-            height=100,
-            key="discover_universe_text",
+        st.markdown("**Universe:** A base list of ~350 ETFs/stocks is preloaded.")
+        extras_text = st.text_input(
+            "Add tickers (optional)",
+            value="",
+            key="discover_extra_tickers",
+            placeholder="e.g., ARKG, TECL, BTI",
+            help="Comma/space/newline separated. These will be appended to the default universe (no removals).",
         )
+        with st.expander("Show base universe (read-only)", expanded=False):
+            st.code(", ".join(DEFAULT_UNIVERSE), language="text")
+
     with coln:
         fetch_news = st.checkbox(
             "Include News Boost",
@@ -471,19 +478,34 @@ with tab_discover:
             key="discover_include_news",
         )
 
-    # Parse universe
-    uni = [t.strip().upper() for t in re.split(r"[,\s]+", universe_text) if t.strip()]
-    # Deduplicate while preserving order; cap to avoid silly large runs
-    uni = list(dict.fromkeys(uni))[:150]
+    # Parse EXTRA tickers, append to DEFAULT_UNIVERSE, dedupe
+    extras = [t.strip().upper() for t in re.split(r"[,\s]+", extras_text or "") if t.strip()]
+    base_uni = list(DEFAULT_UNIVERSE)  # do not mutate the imported list
+    merged_uni = list(dict.fromkeys(base_uni + extras))  # preserve order, drop dups
+
+    # Controls for safety/perf
+    max_universe = st.number_input(
+        "Max universe size to fetch (safety cap)",
+        min_value=50, max_value=2000, value=400, step=50,
+        help="Fetch/score at most this many symbols from the merged universe.",
+        key="discover_max_universe",
+    )
+    uni = merged_uni[: int(max_universe)]
 
     if not uni:
-        st.info("Add at least one ticker to the universe.")
+        st.info("No universe to rank. Add at least one ticker.")
         st.stop()
 
-    # Batched fetch with cache (unique function name to avoid cache collisions)
+    # Always fetch ^GSPC for the benchmark mini-table + relative checks
+    fetch_set = uni.copy()
+    if "^GSPC" not in fetch_set:
+        fetch_set.append("^GSPC")
+
+    # ── Data fetch + status panel ────────────────────────────────────────────────
     @st.cache_data(show_spinner=False, ttl=60 * 30)
     def discover_batch_fetch(tickers, include_news: bool):
         prof, pxs, nws = {}, {}, {}
+        # Keep simple spinners per ticker for uncached runs
         for i, t in enumerate(tickers, 1):
             with st.spinner(f"Fetching {t} ({i}/{len(tickers)})"):
                 try:
@@ -500,14 +522,69 @@ with tab_discover:
                     nws[t] = []
         return prof, pxs, nws
 
-    profiles_u, prices_u, news_u = discover_batch_fetch(uni, fetch_news)
+    status = st.status("Preparing data…", expanded=True)
+    status.update(label=f"Fetching {len(fetch_set)} symbols…", state="running")
+    profiles_u, prices_u, news_u = discover_batch_fetch(fetch_set, fetch_news)
 
-    # Compute scores safely
+    # ── Benchmark mini-table (^GSPC) ────────────────────────────────────────────
+    # Build compare table once (we'll reuse it for main table too)
+    cmp_df = compare.build_compare_table(fetch_set, profiles_u, prices_u).copy()
+    rename_map_cmp = {
+        "ticker": "Ticker",
+        "name": "Name",
+        "type": "Type",
+        "price": "Last Price ($)",
+        "as_of": "As of",
+        "return_ytd": "YTD Return",
+        "return_1m": "1M Return",
+        "return_3m": "3M Return",
+        "return_1y": "1Y Return",
+        "return_5y": "5Y Return",
+        "vol_3m_ann": "Volatility (Ann., 3M)",
+        "max_drawdown": "Max Drawdown",
+        "expense_ratio": "Expense Ratio",
+        "dividend_yield": "Dividend Yield",
+        "aum": "AUM ($)",
+    }
+    cmp_df.rename(columns=rename_map_cmp, inplace=True)
+
+    if "^GSPC" in cmp_df["Ticker"].values:
+        g = cmp_df.loc[cmp_df["Ticker"] == "^GSPC", [
+            "Ticker", "Last Price ($)", "YTD Return", "1M Return", "3M Return",
+            "1Y Return", "5Y Return", "Volatility (Ann., 3M)", "Max Drawdown", "Dividend Yield"
+        ]].copy()
+        # Display as % for readability
+        for c in ["YTD Return", "1M Return", "3M Return", "1Y Return", "5Y Return",
+                  "Volatility (Ann., 3M)", "Max Drawdown", "Dividend Yield"]:
+            if c in g.columns:
+                g[c] = g[c] * 100.0
+
+        st.markdown("**Benchmark: S&P 500 (^GSPC)**")
+        st.dataframe(
+            g,
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "Last Price ($)": st.column_config.NumberColumn(format="$%.2f"),
+                "YTD Return": st.column_config.NumberColumn(format="%.2f%%"),
+                "1M Return": st.column_config.NumberColumn(format="%.2f%%"),
+                "3M Return": st.column_config.NumberColumn(format="%.2f%%"),
+                "1Y Return": st.column_config.NumberColumn(format="%.2f%%"),
+                "5Y Return": st.column_config.NumberColumn(format="%.2f%%"),
+                "Volatility (Ann., 3M)": st.column_config.NumberColumn(format="%.2f%%"),
+                "Max Drawdown": st.column_config.NumberColumn(format="%.0f%%"),
+                "Dividend Yield": st.column_config.NumberColumn(format="%.2f%%"),
+            },
+        )
+
+    # ── Score computation with progress bar ─────────────────────────────────────
+    status.update(label="Computing scores…", state="running")
+    progress = st.progress(0.0)
+
     rows = []
-    for t in uni:
+    for i, t in enumerate(uni, 1):
         pr = profiles_u.get(t) or {}
         px = prices_u.get(t)
-        # Normalize px for score function
         if isinstance(px, pd.DataFrame) and px.empty:
             px = None
         nw = news_u.get(t) or []
@@ -521,15 +598,15 @@ with tab_discover:
                 horizon=horizon,        # reuse global sidebar control
             )
             rows.append(s)
-        except Exception as e:
-            # If a single ticker fails, keep going; record a minimal row
+        except Exception:
             rows.append({"ticker": t, "score_0_100": float("nan")})
+        progress.progress(i / max(1, len(uni)))
 
     if not rows:
-        st.info("No results to display.")
+        status.update(label="No results to display.", state="error")
         st.stop()
 
-    df = pd.DataFrame(rows).set_index("ticker")
+    df_score = pd.DataFrame(rows).set_index("ticker")
 
     # Add profile convenience columns
     def _name(t):
@@ -542,8 +619,8 @@ with tab_discover:
         p = profiles_u.get(t) or {}
         return p.get("aum")
 
-    # Rename / pretty columns
-    rename_map = {
+    # Score-side pretty names
+    rename_map_score = {
         "score_0_100": "Score (0–100)",
         "cost_score": "Cost",
         "liquidity_score": "Liquidity",
@@ -558,49 +635,85 @@ with tab_discover:
         "vol_annualized": "Vol (Ann.)",
         "max_drawdown": "Max DD",
     }
-    df = df.rename(columns=rename_map)
+    df_score.rename(columns=rename_map_score, inplace=True)
 
     # Insert convenience columns at the front
-    df.insert(0, "Name", [ _name(t) for t in df.index ])
-    df.insert(1, "Type", [ _type(t) for t in df.index ])
-    df.insert(2, "AUM ($)", [ _aum(t) for t in df.index ])
+    df_score.insert(0, "Name", [ _name(t) for t in df_score.index ])
+    df_score.insert(1, "Type", [ _type(t) for t in df_score.index ])
+    df_score.insert(2, "AUM ($)", [ _aum(t) for t in df_score.index ])
 
-    # Build sort options from existing columns
-    candidate_sort_cols = [
-        "Score (0–100)", "Momentum", "Cost", "Liquidity",
-        "Volatility", "Drawdown", "Structure", "Tracking", "News"
+    # Keep only non-overlapping compare fields to merge
+    cmp_keep = [
+        "Ticker", "Last Price ($)", "As of",
+        "YTD Return", "1M Return", "3M Return", "1Y Return", "5Y Return",
+        "Volatility (Ann., 3M)", "Max Drawdown",
+        "Dividend Yield",
     ]
-    sort_options = [c for c in candidate_sort_cols if c in df.columns]
+    cmp_part = cmp_df[[c for c in cmp_keep if c in cmp_df.columns]].copy()
 
-    # Unique key to avoid collisions
-    sort_col = st.selectbox("Sort by", sort_options, index=0, key="discover_sort_select")
+    # Merge score table with compare subset (left join on user universe)
+    merged = (
+        df_score
+        .reset_index(names="Ticker")
+        .merge(cmp_part, on="Ticker", how="left")
+        .set_index("Ticker")
+    )
 
-    # Sort (higher is better for all these)
-    df_sorted = df.sort_values(by=sort_col, ascending=False)
+    # Sort & rank
+    sorted_df = merged.sort_values(by="Score (0–100)", ascending=False).copy()
+    sorted_df.insert(0, "Rank", range(1, len(sorted_df) + 1))
 
-    # Insert Rank (1..N) as first column (recomputed on every sort)
-    df_sorted = df_sorted.copy()
-    df_sorted.insert(0, "Rank", range(1, len(df_sorted) + 1))
+    # Final visible columns (Ticker first)
+    display_order = [
+        "Rank",
+        "Name",
+        "Type",
+        "Last Price ($)",
+        "Score (0–100)",
+        "YTD Return",
+        "1M Return",
+        "3M Return",
+        "1Y Return",
+        "5Y Return",
+        "Volatility (Ann., 3M)",
+        "Max Drawdown",
+        "Dividend Yield",
+    ]
+    out = sorted_df.reset_index()
+    final_cols = ["Ticker"] + [c for c in display_order if c in out.columns]
+    out = out[final_cols].copy()
 
-    # Display
+    # Format % columns for display
+    for c in ["YTD Return", "1M Return", "3M Return", "1Y Return", "5Y Return",
+              "Volatility (Ann., 3M)", "Max Drawdown", "Dividend Yield"]:
+        if c in out.columns:
+            out[c] = out[c] * 100.0
+
+    status.update(label="Done.", state="complete")
+
+    # ── Render main table ───────────────────────────────────────────────────────
     st.dataframe(
-        df_sorted,
+        out,
         width="stretch",
+        hide_index=True,
         column_config={
             "Rank": st.column_config.NumberColumn(format="%d"),
-            "Expense Ratio": st.column_config.NumberColumn(format="%.2f%%"),
-            "Vol (Ann.)": st.column_config.NumberColumn(format="%.2f%%"),
-            "Max DD": st.column_config.NumberColumn(format="%.0f%%"),
-            "Avg Volume": st.column_config.NumberColumn(format="%,.0f"),
-            "AUM ($)": st.column_config.NumberColumn(format="$%,.0f"),
+            "Last Price ($)": st.column_config.NumberColumn(format="$%.2f"),
+            "Score (0–100)": st.column_config.NumberColumn(format="%.0f"),
+            "YTD Return": st.column_config.NumberColumn(format="%.2f%%"),
+            "1M Return": st.column_config.NumberColumn(format="%.2f%%"),
+            "3M Return": st.column_config.NumberColumn(format="%.2f%%"),
+            "1Y Return": st.column_config.NumberColumn(format="%.2f%%"),
+            "5Y Return": st.column_config.NumberColumn(format="%.2f%%"),
+            "Volatility (Ann., 3M)": st.column_config.NumberColumn(format="%.2f%%"),
+            "Max Drawdown": st.column_config.NumberColumn(format="%.0f%%"),
+            "Dividend Yield": st.column_config.NumberColumn(format="%.2f%%"),
         },
     )
 
-
-    # Download (unique key for button)
     st.download_button(
         "⬇️ Download ranked table (CSV)",
-        df_sorted.reset_index().to_csv(index=False).encode(),
+        out.to_csv(index=False).encode(),
         file_name="fund_rankings.csv",
         mime="text/csv",
         key="discover_download_csv",
