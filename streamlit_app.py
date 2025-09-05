@@ -216,88 +216,171 @@ with tab_risk:
 
     st.subheader("Transparent Score (0–100)")
     st.caption(
-        "Scoring system combining costs, liquidity, volatility/drawdown, structure, momentum, tracking (placeholder), and simple news sentiment."
+        "Our score blends fundamentals and market behavior: liquidity (volume), realized volatility & drawdown, "
+        "structure (penalties for ETNs/leveraged), multi-window momentum, and a light news signal. "
+        "Weights adapt to your Risk setting."
+    )
 
-    )
-    st.caption("Note: Use risk slider to adjust score - Low should boost conservative funds (low vol / shallow drawdowns / low cost) and penalize high-octane names. \n"
-        " High should reward momentum/liquidity and penalize volatility/drawdown more lightly."
-    )
+    # --- compute scores for the active tickers ---
     rows = []
     for t in tickers:
         pr = profiles[t]
         px = prices[t]
         nw = news_items.get(t, [])
-        s = score.compute_score(
-            ticker=t,
-            profile=pr,
-            prices=px,
-            news_items=nw,
-            risk_tolerance=risk,
-            horizon=horizon
-        )
-        rows.append(s)
+        try:
+            s = score.compute_score(
+                ticker=t,
+                profile=pr,
+                prices=px,
+                news_items=nw,
+                risk_tolerance=risk,
+                horizon=horizon,
+            )
+            rows.append(s)
+        except Exception:
+            rows.append({"ticker": t, "score_0_100": float("nan")})
 
     raw_df = pd.DataFrame(rows).set_index("ticker")
 
-    # Prettify column headers
+    # Friendly headers (no Expense Ratio here)
     rename_map = {
         "score_0_100": "Score (0–100)",
-        "cost_score": "Cost Score",
-        "liquidity_score": "Liquidity Score",
-        "volatility_score": "Volatility Score",
-        "drawdown_score": "Drawdown Score",
-        "structure_score": "Structure Score",
-        "momentum_score": "Momentum Score",
-        "tracking_score": "Tracking Score",
-        "news_score": "News Score",
-        "expense_ratio": "Expense Ratio",
+        "cost_score": "Cost",
+        "liquidity_score": "Liquidity",
+        "volatility_score": "Volatility",
+        "drawdown_score": "Drawdown",
+        "structure_score": "Structure",
+        "momentum_score": "Momentum",
+        "tracking_score": "Tracking",
+        "news_score": "News",
         "avg_volume": "Avg Volume",
         "vol_annualized": "Volatility (Ann.)",
         "max_drawdown": "Max Drawdown",
     }
     df = raw_df.rename(columns=rename_map)
 
-    # Nicer column order (only keep those that exist)
-    ordered_cols = [
-        "Score (0–100)",
-        "Cost Score",
-        "Liquidity Score",
-        "Volatility Score",
-        "Drawdown Score",
-        "Structure Score",
-        "Momentum Score",
-        "Tracking Score",
-        "News Score",
-        "Expense Ratio",
-        "Avg Volume",
-        "Volatility (Ann.)",
-        "Max Drawdown",
-    ]
-    df = df[[c for c in ordered_cols if c in df.columns]]
+    # Convenience profile fields
+    def _name(t):
+        p = profiles.get(t, {})
+        return p.get("longName") or p.get("shortName") or ""
 
-    st.dataframe(df, width='stretch')
+    def _type(t):
+        p = profiles.get(t, {})
+        return p.get("instrument_type") or ""
 
-    # Quick glossary
-    st.markdown("### Glossary")
+    def _aum(t):
+        p = profiles.get(t, {})
+        return p.get("aum")
+
+    def _last_price(t):
+        px = prices.get(t)
+        try:
+            return float(px["Close"].dropna().iloc[-1]) if px is not None and not px.empty else None
+        except Exception:
+            return None
+
+    df.insert(0, "Name", [ _name(t) for t in df.index ])
+    df.insert(1, "Type", [ _type(t) for t in df.index ])
+    # Insert Last Price and AUM columns
+    df.insert(2, "Last Price ($)", [ _last_price(t) for t in df.index ])
+    df.insert(3, "AUM ($)", [ _aum(t) for t in df.index ])
+
+    # Arrange columns we want to show (skip gracefully if any missing)
+    factor_cols = ["Momentum", "Cost", "Liquidity", "Volatility", "Drawdown", "Structure", "Tracking", "News"]
+    raw_cols    = ["Avg Volume", "Volatility (Ann.)", "Max Drawdown"]  # NO "Expense Ratio"
+
+    keep = ["Name", "Type", "Last Price ($)", "AUM ($)", "Score (0–100)"] \
+           + [c for c in factor_cols if c in df.columns] \
+           + [c for c in raw_cols if c in df.columns]
+    df = df[[c for c in keep if c in df.columns]]
+
+    # Sort by score and add Rank; expose Ticker as first column
+    df_sorted = df.sort_values(by="Score (0–100)", ascending=False).copy()
+    df_sorted.insert(0, "Rank", range(1, len(df_sorted) + 1))
+    out = df_sorted.reset_index(names="Ticker")
+
+    # Ensure numeric for display formatting (prevents Streamlit warnings)
+    for num_col in ["Last Price ($)", "AUM ($)", "Avg Volume", "Volatility (Ann.)", "Max Drawdown"]:
+        if num_col in out.columns:
+            out[num_col] = pd.to_numeric(out[num_col], errors="coerce")
+
+    # Percent scale for these two raw risk inputs (NOT Avg Volume/AUM/Last Price)
+    for c in ["Volatility (Ann.)", "Max Drawdown"]:
+        if c in out.columns:
+            out[c] = out[c] * 100.0
+
+    # Final visible order: Ticker first
+    ordered = ["Ticker", "Rank", "Name", "Type", "Score (0–100)", "Last Price ($)", "AUM ($)"] \
+              + factor_cols + raw_cols
+    show = out[[c for c in ordered if c in out.columns]]
+
+    st.dataframe(
+        show,
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "Rank": st.column_config.NumberColumn(format="%d"),
+            "Last Price ($)": st.column_config.NumberColumn(format="$%.2f"),
+            "Score (0–100)": st.column_config.NumberColumn(format="%.0f"),
+
+            # factors are already 0–100
+            "Momentum":  st.column_config.NumberColumn(format="%.0f"),
+            "Cost":      st.column_config.NumberColumn(format="%.0f"),
+            "Liquidity": st.column_config.NumberColumn(format="%.0f"),
+            "Volatility":st.column_config.NumberColumn(format="%.0f"),
+            "Drawdown":  st.column_config.NumberColumn(format="%.0f"),
+            "Structure": st.column_config.NumberColumn(format="%.0f"),
+            "Tracking":  st.column_config.NumberColumn(format="%.0f"),
+            "News":      st.column_config.NumberColumn(format="%.0f"),
+            # raw inputs
+            "Avg Volume":         st.column_config.NumberColumn(format="%.0f"),
+            "Volatility (Ann.)":  st.column_config.NumberColumn(format="%.2f%%"),
+            "Max Drawdown":       st.column_config.NumberColumn(format="%.0f%%"),
+            "AUM ($)": st.column_config.NumberColumn(format="dollar"),
+
+        },
+    )
+
+    # --- Methodology (replaces the old glossary) ---
+    st.markdown("### About the methodology")
     st.markdown(
         """
-- **Score (0–100):** Weighted blend of the factors below (educational, not advice).
-- **Cost Score:** Lower **expense ratio** → higher score.
-- **Liquidity Score:** Based on **average trading volume**; higher volume gets a higher score.
-- **Volatility Score:** Lower **3-month annualized volatility** → higher score.
-- **Drawdown Score:** Shallower **max drop from peak** over the window → higher score.
-- **Structure Score:** Penalties for **ETNs** and **leveraged** products (e.g., 2×/3×).
-- **Momentum Score:** Near-term trend (≈ 3-month) vs 12-month baseline.
-- **Tracking Score:** Placeholder (currently neutral) until a benchmark is wired.
-- **News Score:** Small boost/penalty from recent headline keywords.
-- **Expense Ratio:** Annual fee charged by the fund.
-- **Avg Volume:** Typical daily shares traded (liquidity proxy).
-- **Volatility (Ann.):** Annualized stdev of recent daily returns (≈ last 3 months).
-- **Max Drawdown:** Worst peak-to-trough drop in the window.
+**Pipeline.** For each symbol we gather profile fields (expense ratio, average volume, instrument type, name) and recent
+prices. From prices we compute **3-month annualized volatility** and **max drawdown** over the lookback. We also derive a
+two-window **momentum composite** using ≈63-day and ≈252-day horizons. A lightweight **headline signal** counts positive/
+negative keywords in recent news.
+
+**Normalization.** Each raw input is mapped to a [0,1] score using bounded min–max transforms, then clipped:
+- Lower-is-better metrics (expense ratio, volatility, drawdown) are **inverted** after scaling.  
+- Higher-is-better metrics (volume) are scaled directly.  
+- Missing values default to a neutral 0.5 before weighting.
+
+**Structure filter.** We apply explicit penalties when the instrument is an **ETN** or contains **2x/3x/“leveraged”**
+in the name, yielding a Structure sub-score. This penalty is risk-aware (see below).
+
+**Momentum.** The momentum pillar blends a short window (~3 months) against a 12-month baseline, rewarding persistent,
+recent strength while dampening one-off spikes. The composite is normalized to [0,1] and contributes more at higher risk.
+
+**Aggregation.** Pillar scores are combined with weights that depend on your **Risk** slider. We start from a balanced
+baseline and multiply per-pillar weights, then re-normalize so weights sum to 1. The final total is clipped to [0,1]
+and shown as **0–100**.
+
+**Risk setting (how weights & penalties shift):**
+- **Low** — Emphasizes *Cost*, *Structure*, and *Risk control* (Volatility/Drawdown). Momentum’s influence is reduced and
+structure penalties are harsher, favoring conservative, set-and-forget funds.
+- **Medium** — Balanced blend; no extra tilts beyond the baseline.
+- **High** — Boosts *Momentum* and *Liquidity*, and **softens** Volatility/Drawdown/Structure penalties so faster,
+higher-beta names can surface.
+
+This score is an educational summary of multiple signals—not advice. Always sanity-check constituents, taxes, and fit to
+your own objectives.
 """
     )
+
     st.markdown("---")
-    st.caption("© Fundamental. For education only. Do your own research.")
+    st.caption("© Fundamental — educational only. Do your own research.")
+
+
 
 # -------- Compare --------
 with tab_compare:
@@ -334,7 +417,6 @@ with tab_compare:
         "return_5y": "5Y Return",
         "vol_3m_ann": "Volatility (Ann., 3M)",
         "max_drawdown": "Max Drawdown",
-        "expense_ratio": "Expense Ratio",
         "dividend_yield": "Dividend Yield",
         "aum": "AUM ($)",
     }
@@ -402,9 +484,9 @@ with tab_compare:
             "5Y Return": st.column_config.NumberColumn(format="%.2f%%"),
             "Volatility (Ann., 3M)": st.column_config.NumberColumn(format="%.2f%%"),
             "Max Drawdown": st.column_config.NumberColumn(format="%.0f%%"),
-            "Expense Ratio": st.column_config.NumberColumn(format="%.2f%%"),
+            #"Expense Ratio": st.column_config.NumberColumn(format="%.2f%%"),
             "Dividend Yield": st.column_config.NumberColumn(format="%.2f%%"),
-            "AUM ($)": st.column_config.NumberColumn(format="$%,d"),
+            "AUM ($)": st.column_config.NumberColumn(format="dollar"),
         },
     )
 
